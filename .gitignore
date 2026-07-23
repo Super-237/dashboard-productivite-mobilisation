@@ -1,0 +1,16 @@
+# SSIS : les .dtsx et fichiers de solution contiennent la chaine de connexion
+# reelle (serveur/base) -> jamais publies. Seuls sql/ et docs/ sont versionnes.
+ssis/
+
+# Fichiers Visual Studio / temporaires
+.vs/
+*.suo
+*.user
+bin/
+obj/
+
+# Notes de construction et artefacts d'audit : usage interne, non publies.
+# Le depot expose le livrable (captures, PDF, scripts) et le raisonnement (README).
+docs/guide_habillage.md
+docs/maquette.md
+results.xlsx

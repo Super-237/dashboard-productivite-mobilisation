@@ -1,0 +1,72 @@
+{
+  "name": "EMF - Productivite & mobilisation",
+  "dataColors": [
+    "#0E5A63",
+    "#3E8E8A",
+    "#7BB8B2",
+    "#B9D6D2",
+    "#C8622E",
+    "#E0985A",
+    "#6B7C8C",
+    "#A9B7C2"
+  ],
+  "background": "#FFFFFF",
+  "foreground": "#22303A",
+  "tableAccent": "#0E5A63",
+  "good": "#2F7D5B",
+  "neutral": "#D98A3D",
+  "bad": "#B23A28",
+  "maximum": "#2F7D5B",
+  "center": "#D98A3D",
+  "minimum": "#0E5A63",
+  "textClasses": {
+    "title": {
+      "fontFace": "Segoe UI Semibold",
+      "fontSize": 13,
+      "color": "#0E5A63"
+    },
+    "label": {
+      "fontFace": "Segoe UI",
+      "fontSize": 10,
+      "color": "#22303A"
+    },
+    "callout": {
+      "fontFace": "Segoe UI Semibold",
+      "fontSize": 28,
+      "color": "#0E5A63"
+    }
+  },
+  "visualStyles": {
+    "*": {
+      "*": {
+        "title": [
+          {
+            "show": true,
+            "fontColor": { "solid": { "color": "#0E5A63" } },
+            "fontSize": 12,
+            "fontFamily": "Segoe UI Semibold"
+          }
+        ],
+        "background": [
+          {
+            "show": true,
+            "color": { "solid": { "color": "#FFFFFF" } },
+            "transparency": 0
+          }
+        ],
+        "border": [
+          {
+            "show": true,
+            "color": { "solid": { "color": "#E1E6EB" } },
+            "radius": 6
+          }
+        ],
+        "visualHeader": [
+          {
+            "show": false
+          }
+        ]
+      }
+    }
+  }
+}

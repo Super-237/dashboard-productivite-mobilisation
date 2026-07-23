@@ -1,0 +1,4 @@
+# Classification des langages pour GitHub Linguist :
+# tous les scripts SQL du projet sont du T-SQL (SQL Server),
+# sans cette directive certains sont detectes a tort comme PL/pgSQL.
+*.sql linguist-language=TSQL

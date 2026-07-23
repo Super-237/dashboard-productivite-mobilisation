@@ -1,0 +1,231 @@
+/*===============================================================================
+  Projet : Portfolio Power BI - Productivite & mobilisation des ressources (EMF)
+  Fichier: mesures_dax.dax
+  Objet  : Mesures DAX du modele (chaque mesure est commentee apres le "=").
+  Modele : constellation multi-faits. Axes conformes communs = TEMPS + AGENCE.
+           Gestionnaire = adhesion/production ; produit = epargne/production ;
+           type de revenu = revenus. Croiser un fait par une dimension qui ne le
+           relie pas donne un resultat faux ou vide.
+  Fenetre: grain mensuel, 2018-01 -> 2024-11. DIM_CALENDRIER marquee table de dates.
+===============================================================================*/
+
+
+/*--- INDICATEURS DE BASE ------------------------------------------------------*/
+
+Nb adhesions =
+-- Nombre de nouvelles adhesions (compte deja agrege -> SUM).
+SUM ( FACT_ADHESION[NB_ADHESIONS] )
+
+Depots guichet =
+-- Montant depose au guichet (flux de caisse, pas une variation d'encours).
+SUM ( FACT_EPARGNE[MONTANT_DEPOTS] )
+
+Montant decaisse =
+-- Capital des prets mis en place dans la periode (production commerciale).
+SUM ( FACT_PRODUCTION_CREDIT[MONTANT_DECAISSE] )
+
+Revenu total =
+-- Total des revenus encaisses, tous types confondus.
+SUM ( FACT_REVENU[MONTANT_REVENU] )
+
+
+/*=============================================================================
+  TIME INTELLIGENCE
+   (a) N-1 mensuel : superposer annee vs N-1 sur une courbe (axe = mois).
+   (b) YTD janvier->novembre : comparaison annuelle equitable (dec. 2024 tronque),
+       pour les KPI de croissance. Chaque "YTD nov" + "N-1" alimente un
+       "Croissance ... YTD %".
+=============================================================================*/
+
+Nb adhesions N-1 =
+CALCULATE ( [Nb adhesions], SAMEPERIODLASTYEAR ( DIM_CALENDRIER[DATE_JOUR] ) )
+
+Depots guichet N-1 =
+CALCULATE ( [Depots guichet], SAMEPERIODLASTYEAR ( DIM_CALENDRIER[DATE_JOUR] ) )
+
+Nb adhesions YTD nov =
+CALCULATE ( [Nb adhesions], DIM_CALENDRIER[MOIS] <= 11 )
+Nb adhesions YTD nov N-1 =
+CALCULATE ( [Nb adhesions], DIM_CALENDRIER[MOIS] <= 11,
+            SAMEPERIODLASTYEAR ( DIM_CALENDRIER[DATE_JOUR] ) )
+Croissance adhesions YTD % =
+DIVIDE ( [Nb adhesions YTD nov] - [Nb adhesions YTD nov N-1],
+         [Nb adhesions YTD nov N-1] )
+
+Depots guichet YTD nov =
+CALCULATE ( [Depots guichet], DIM_CALENDRIER[MOIS] <= 11 )
+Depots guichet YTD nov N-1 =
+CALCULATE ( [Depots guichet], DIM_CALENDRIER[MOIS] <= 11,
+            SAMEPERIODLASTYEAR ( DIM_CALENDRIER[DATE_JOUR] ) )
+Croissance depots YTD % =
+DIVIDE ( [Depots guichet YTD nov] - [Depots guichet YTD nov N-1],
+         [Depots guichet YTD nov N-1] )
+
+Montant decaisse YTD nov =
+CALCULATE ( [Montant decaisse], DIM_CALENDRIER[MOIS] <= 11 )
+Montant decaisse YTD nov N-1 =
+CALCULATE ( [Montant decaisse], DIM_CALENDRIER[MOIS] <= 11,
+            SAMEPERIODLASTYEAR ( DIM_CALENDRIER[DATE_JOUR] ) )
+Croissance decaisse YTD % =
+DIVIDE ( [Montant decaisse YTD nov] - [Montant decaisse YTD nov N-1],
+         [Montant decaisse YTD nov N-1] )
+
+Revenu total YTD nov =
+CALCULATE ( [Revenu total], DIM_CALENDRIER[MOIS] <= 11 )
+Revenu total YTD nov N-1 =
+CALCULATE ( [Revenu total], DIM_CALENDRIER[MOIS] <= 11,
+            SAMEPERIODLASTYEAR ( DIM_CALENDRIER[DATE_JOUR] ) )
+Croissance revenu YTD % =
+DIVIDE ( [Revenu total YTD nov] - [Revenu total YTD nov N-1],
+         [Revenu total YTD nov N-1] )
+
+
+/*=============================================================================
+  BENCHMARKING PAGE FOCUS AGENCE
+  Une seule agence filtree par le segment. Pour classer parmi TOUTES les autres,
+  on utilise ALL ( DIM_AGENCE ) -- pas ALL ( ...[COD_AGENCE] ), qui ne nettoierait
+  pas le filtre du segment pose sur "Agence (libelle)" (rang toujours 1).
+  DG1 (Siege) exclu du perimetre agences.
+=============================================================================*/
+
+Nb agences (hors siege) =
+COUNTROWS ( FILTER ( ALL ( DIM_AGENCE ), DIM_AGENCE[COD_AGENCE] <> "DG1" ) )
+
+Depots guichet rang agence =
+IF (
+    HASONEVALUE ( DIM_AGENCE[COD_AGENCE] ),
+    RANKX (
+        FILTER ( ALL ( DIM_AGENCE ), DIM_AGENCE[COD_AGENCE] <> "DG1" ),
+        [Depots guichet], , DESC, DENSE
+    )
+)
+
+Depots guichet mediane reseau =
+MEDIANX (
+    FILTER ( ALL ( DIM_AGENCE ), DIM_AGENCE[COD_AGENCE] <> "DG1" ),
+    [Depots guichet]
+)
+
+Depots guichet ecart mediane =
+[Depots guichet] - [Depots guichet mediane reseau]
+
+
+/*=============================================================================
+  SYNTHESE DYNAMIQUE (storytelling explicite, Knaflic)
+  Mesures texte a inserer dans une zone de texte via fx (valeur dynamique).
+=============================================================================*/
+
+Synthese Reseau =
+-- Phrase adaptative : mois+annee -> phrase du mois (comparaison meme mois N-1) ;
+-- annee seule -> phrase de l'annee (croissance YTD) ; rien -> resume periode.
+VAR AnneeSel = SELECTEDVALUE ( DIM_CALENDRIER[ANNEE] )
+VAR MoisSel  = SELECTEDVALUE ( DIM_CALENDRIER[NOM_MOIS] )
+VAR TxtAdh   = FORMAT ( [Nb adhesions], "#,0" )
+VAR TxtDep   = FORMAT ( DIVIDE ( [Depots guichet],   1000000000 ), "0.0" )
+VAR TxtRev   = FORMAT ( DIVIDE ( [Revenu total],     1000000000 ), "0.0" )
+VAR TxtDec   = FORMAT ( DIVIDE ( [Montant decaisse], 1000000000 ), "0.0" )
+VAR gAdhAn   = [Croissance adhesions YTD %]
+VAR VerbeAn  = IF ( gAdhAn >= 0, "poursuit sa croissance", "marque le pas" )
+VAR CompAn   =
+    IF ( ISBLANK ( gAdhAn ), "",
+         " (" & FORMAT ( gAdhAn, "+0.0%;-0.0%" ) & " vs " & FORMAT ( AnneeSel - 1, "0" ) & ")" )
+VAR gAdhMois = DIVIDE ( [Nb adhesions] - [Nb adhesions N-1], [Nb adhesions N-1] )
+VAR CompMois =
+    IF ( ISBLANK ( gAdhMois ), "",
+         " (" & FORMAT ( gAdhMois, "+0.0%;-0.0%" ) & " vs " & MoisSel & " " & FORMAT ( AnneeSel - 1, "0" ) & ")" )
+VAR PhraseMois =
+    "En " & MoisSel & " " & FORMAT ( AnneeSel, "0" ) & ", le reseau a enregistre "
+        & TxtAdh & " nouvelles adhesions" & CompMois & ", "
+        & TxtDep & " Md FCFA de depots au guichet et "
+        & TxtRev & " Md FCFA de revenus. "
+        & "La production de credit atteint " & TxtDec & " Md FCFA."
+VAR PhraseAnnee =
+    "En " & FORMAT ( AnneeSel, "0" ) & ", le reseau " & VerbeAn & " : "
+        & TxtAdh & " nouvelles adhesions" & CompAn & ", "
+        & TxtDep & " Md FCFA mobilises au guichet et "
+        & TxtRev & " Md FCFA de revenus encaisses. "
+        & "La production de credit atteint " & TxtDec & " Md FCFA."
+VAR PhrasePeriode =
+    "Sur 2018-2024, le reseau a recrute " & TxtAdh
+        & " nouveaux membres, mobilise " & TxtDep
+        & " Md FCFA de depots au guichet et genere " & TxtRev
+        & " Md FCFA de revenus, pour une production de credit de "
+        & TxtDec & " Md FCFA."
+RETURN
+    IF (
+        NOT ISBLANK ( AnneeSel ),
+        IF ( NOT ISBLANK ( MoisSel ), PhraseMois, PhraseAnnee ),
+        PhrasePeriode
+    )
+
+Synthese Focus =
+-- Page Focus : agence selectionnee, son rang et sa position vs la mediane reseau.
+VAR Ag       = SELECTEDVALUE ( DIM_AGENCE[Agence (libelle)] )
+VAR NbAg     = [Nb agences (hors siege)]
+VAR Rang     = [Depots guichet rang agence]
+VAR TxtAdh   = FORMAT ( [Nb adhesions], "#,0" )
+VAR TxtDep   = FORMAT ( DIVIDE ( [Depots guichet], 1000000000 ), "0.0" )
+VAR TxtRev   = FORMAT ( DIVIDE ( [Revenu total],   1000000000 ), "0.0" )
+VAR EcartMed = [Depots guichet ecart mediane]
+VAR PosMed   = IF ( EcartMed >= 0, "au-dessus de", "en dessous de" )
+RETURN
+    IF (
+        ISBLANK ( Ag ),
+        "Selectionnez une agence pour afficher son analyse detaillee.",
+        "L'" & Ag & " se classe " & FORMAT ( Rang, "0" ) & "e sur " & FORMAT ( NbAg, "0" )
+            & " en depots mobilises. Elle a recrute " & TxtAdh & " nouveaux membres et "
+            & "mobilise " & TxtDep & " Md FCFA de depots au guichet, pour " & TxtRev
+            & " Md FCFA de revenus. Sa collecte se situe " & PosMed
+            & " la mediane du reseau."
+    )
+
+Libelle periode =
+-- Cote droit du bandeau : s'adapte au filtre temps (mois+annee / annee / periode).
+VAR AnneeSel = SELECTEDVALUE ( DIM_CALENDRIER[ANNEE] )
+VAR MoisSel  = SELECTEDVALUE ( DIM_CALENDRIER[NOM_MOIS] )
+VAR MoisCap  = UPPER ( LEFT ( MoisSel, 1 ) ) & MID ( MoisSel, 2, LEN ( MoisSel ) )
+VAR Detail =
+    IF (
+        NOT ISBLANK ( AnneeSel ),
+        IF ( NOT ISBLANK ( MoisSel ),
+             MoisCap & " " & FORMAT ( AnneeSel, "0" ),
+             "Annee " & FORMAT ( AnneeSel, "0" ) ),
+        "2018 - 2024"
+    )
+RETURN "Periode : " & Detail
+
+
+/*=============================================================================
+  CARTES D'EN-TETE : helpers "fleche" + "couleur"
+  Le visuel Carte n'affiche pas de fleche native : on la fabrique en texte
+  (UNICHAR 9650 = fleche haut, 9660 = bas), et on pilote la couleur par mesure.
+  La fleche integre " vs N-1" (le titre d'etiquette est desactive cote visuel).
+=============================================================================*/
+
+Croissance adhesions (fleche) =
+VAR g = [Croissance adhesions YTD %]
+RETURN
+    IF ( g >= 0, UNICHAR ( 9650 ), UNICHAR ( 9660 ) ) & " " & FORMAT ( g, "0.0%" ) & " vs N-1"
+Croissance adhesions (couleur) =
+IF ( [Croissance adhesions YTD %] >= 0, "#2F7D5B", "#B23A28" )
+
+Croissance depots (fleche) =
+VAR g = [Croissance depots YTD %]
+RETURN
+    IF ( g >= 0, UNICHAR ( 9650 ), UNICHAR ( 9660 ) ) & " " & FORMAT ( g, "0.0%" ) & " vs N-1"
+Croissance depots (couleur) =
+IF ( [Croissance depots YTD %] >= 0, "#2F7D5B", "#B23A28" )
+
+Croissance decaisse (fleche) =
+VAR g = [Croissance decaisse YTD %]
+RETURN
+    IF ( g >= 0, UNICHAR ( 9650 ), UNICHAR ( 9660 ) ) & " " & FORMAT ( g, "0.0%" ) & " vs N-1"
+Croissance decaisse (couleur) =
+IF ( [Croissance decaisse YTD %] >= 0, "#2F7D5B", "#B23A28" )
+
+Croissance revenu (fleche) =
+VAR g = [Croissance revenu YTD %]
+RETURN
+    IF ( g >= 0, UNICHAR ( 9650 ), UNICHAR ( 9660 ) ) & " " & FORMAT ( g, "0.0%" ) & " vs N-1"
+Croissance revenu (couleur) =
+IF ( [Croissance revenu YTD %] >= 0, "#2F7D5B", "#B23A28" )
